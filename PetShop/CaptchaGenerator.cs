@@ -6,7 +6,7 @@ using System.Drawing.Text;
 namespace PetShop  // ВАЖНО: Замените YourProjectName на имя вашего проекта!
 {
     /// <summary>
-    /// Класс для генерации CAPTCHA
+   
     /// Issue #1: Базовая генерация
     /// Issue #2: Шум (линии и точки)
     /// Issue #3: Наклон символов и спецэффекты
