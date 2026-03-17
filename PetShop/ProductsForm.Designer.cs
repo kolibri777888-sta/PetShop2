@@ -159,7 +159,7 @@ namespace PetShop
             // 
             this.lblColorHint.AutoSize = true;
             this.lblColorHint.ForeColor = System.Drawing.Color.Red;
-            this.lblColorHint.Location = new System.Drawing.Point(270, 103);
+            this.lblColorHint.Location = new System.Drawing.Point(285, 128);
             this.lblColorHint.Name = "lblColorHint";
             this.lblColorHint.Size = new System.Drawing.Size(87, 13);
             this.lblColorHint.TabIndex = 10;
