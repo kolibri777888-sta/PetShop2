@@ -74,6 +74,7 @@
     <Compile Include="AddSupplierForm.Designer.cs">
       <DependentUpon>AddSupplierForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="CaptchaGenerator.cs" />
     <Compile Include="CategoriesForm.cs">
       <SubType>Form</SubType>
     </Compile>
