@@ -3,11 +3,11 @@ using System.Drawing;
 using System.Windows.Forms;
 using MySql.Data.MySqlClient;
 
-namespace PetShop  // Замените на имя вашего проекта
+namespace PetShop
 {
     public partial class LoginForm : Form
     {
-        // ===== НОВЫЕ ПОЛЯ ДЛЯ CAPTCHA =====
+        // ===== ПОЛЯ ДЛЯ CAPTCHA =====
         private CaptchaGenerator captchaGenerator;
         private string currentCaptchaText;
         private int failedAttempts = 0;
@@ -18,31 +18,24 @@ namespace PetShop  // Замените на имя вашего проекта
         public LoginForm()
         {
             InitializeComponent();
-
-            // ===== ИНИЦИАЛИЗАЦИЯ CAPTCHA =====
             InitializeCaptcha();
         }
 
-        // ===== НОВЫЙ МЕТОД: Инициализация CAPTCHA =====
+        // ===== ИНИЦИАЛИЗАЦИЯ CAPTCHA =====
         private void InitializeCaptcha()
         {
-            // Создаем генератор капчи
             captchaGenerator = new CaptchaGenerator();
 
-            // Создаем таймер для блокировки
             blockTimer = new Timer();
-            blockTimer.Interval = 1000; // 1 секунда
+            blockTimer.Interval = 1000;
             blockTimer.Tick += BlockTimer_Tick;
 
-            // Изначально скрываем все элементы CAPTCHA
             ShowCaptchaControls(false);
         }
 
-        // ===== НОВЫЙ МЕТОД: Показать/скрыть элементы CAPTCHA =====
+        // ===== ПОКАЗАТЬ/СКРЫТЬ ЭЛЕМЕНТЫ CAPTCHA =====
         private void ShowCaptchaControls(bool show)
         {
-            // Убедитесь, что эти контролы есть на форме!
-            // Если их нет, добавьте их через дизайнер
             if (pbCaptcha != null)
                 pbCaptcha.Visible = show;
 
@@ -55,67 +48,61 @@ namespace PetShop  // Замените на имя вашего проекта
             if (lblCaptcha != null)
                 lblCaptcha.Visible = show;
 
-            // Если капча показывается - генерируем новую
             if (show)
             {
                 GenerateNewCaptcha();
             }
         }
 
-        // ===== НОВЫЙ МЕТОД: Генерация новой CAPTCHA =====
+        // ===== ГЕНЕРАЦИЯ НОВОЙ CAPTCHA =====
         private void GenerateNewCaptcha()
         {
             currentCaptchaText = captchaGenerator.GenerateCaptchaText(4);
             pbCaptcha.Image = captchaGenerator.CreateCaptchaImage(currentCaptchaText);
         }
 
-        // ===== НОВЫЙ МЕТОД: Обработчик кнопки обновления CAPTCHA =====
+        // ===== ОБНОВЛЕНИЕ CAPTCHA =====
         private void btnRefreshCaptcha_Click(object sender, EventArgs e)
         {
             GenerateNewCaptcha();
             txtCaptcha.Clear();
         }
 
-        // ===== НОВЫЙ МЕТОД: Запуск блокировки =====
+        // ===== ЗАПУСК БЛОКИРОВКИ =====
         private void StartBlocking()
         {
             isBlocked = true;
             blockTimeRemaining = 10;
 
-            // Блокируем все элементы управления
             txtLogin.Enabled = false;
             txtPassword.Enabled = false;
             txtCaptcha.Enabled = false;
             btnLogin.Enabled = false;
             btnRefreshCaptcha.Enabled = false;
 
-            // Показываем сообщение о блокировке
             MessageBox.Show($"Система заблокирована на {blockTimeRemaining} секунд",
                            "Блокировка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
-            // Запускаем таймер
             blockTimer.Start();
         }
 
-        // ===== НОВЫЙ МЕТОД: Снятие блокировки =====
+        // ===== СНЯТИЕ БЛОКИРОВКИ =====
         private void StopBlocking()
         {
             isBlocked = false;
             blockTimer.Stop();
 
-            // Разблокируем элементы управления
             txtLogin.Enabled = true;
             txtPassword.Enabled = true;
             txtCaptcha.Enabled = true;
             btnLogin.Enabled = true;
             btnRefreshCaptcha.Enabled = true;
 
-            // Генерируем новую капчу для следующей попытки
             GenerateNewCaptcha();
             txtCaptcha.Clear();
         }
 
-        // ===== НОВЫЙ МЕТОД: Тик таймера блокировки =====
+        // ===== ТАЙМЕР БЛОКИРОВКИ =====
         private void BlockTimer_Tick(object sender, EventArgs e)
         {
             blockTimeRemaining--;
@@ -126,100 +113,120 @@ namespace PetShop  // Замените на имя вашего проекта
             }
         }
 
-        // ===== ИЗМЕНЕННЫЙ МЕТОД: Обработчик кнопки входа =====
-        private void btnLogin_Click(object sender, System.EventArgs e)
+        // ===== ОСНОВНОЙ МЕТОД ВХОДА =====
+        private void btnLogin_Click(object sender, EventArgs e)
         {
-            // ===== ПРОВЕРКА БЛОКИРОВКИ =====
+            // Проверка блокировки
             if (isBlocked)
             {
                 MessageBox.Show($"Система заблокирована. Подождите {blockTimeRemaining} секунд.");
                 return;
             }
 
-            // ===== ПРОВЕРКА CAPTCHA =====
-            if (failedAttempts >= 1) // Если капча должна быть видна
+            // Проверка CAPTCHA (если нужно)
+            if (failedAttempts >= 1)
             {
-                // Проверяем, ввел ли пользователь капчу
                 if (string.IsNullOrWhiteSpace(txtCaptcha.Text))
                 {
                     MessageBox.Show("Введите код с картинки!");
                     return;
                 }
 
-                // Сравниваем введенный текст с текущим значением (без учета регистра)
                 if (txtCaptcha.Text.Trim().ToUpper() != currentCaptchaText.ToUpper())
                 {
                     MessageBox.Show("Неверный код CAPTCHA!");
 
-                    // Генерируем новую капчу
                     GenerateNewCaptcha();
                     txtCaptcha.Clear();
 
-                    // Если это уже не первая неудачная попытка с капчей - блокируем
                     if (failedAttempts >= 2)
                     {
                         StartBlocking();
                     }
 
-                    return; // Важно: не проверяем логин, если капча неверна
+                    return;
                 }
             }
 
-            // ===== ВАША СУЩЕСТВУЮЩАЯ ЛОГИКА ВХОДА (НЕ ИЗМЕНЕНА) =====
-            using (var con = DB.Get())
+            // Проверка логина и пароля
+            try
             {
-                var cmd = new MySqlCommand(@"
-                SELECT r.Name
-                FROM Employees e
-                JOIN Roles r ON e.RoleId=r.Id
-                WHERE Login=@l AND Password=@p", con);
-
-                cmd.Parameters.AddWithValue("@l", txtLogin.Text);
-                cmd.Parameters.AddWithValue("@p", txtPassword.Text);
-
-                con.Open();
-
-                var r = cmd.ExecuteReader();
-
-                if (r.Read())
+                using (var con = DB.Get())
                 {
-                    string role = r.GetString(0);
-
-                    // УСПЕШНЫЙ ВХОД - сбрасываем счетчик и скрываем капчу
-                    failedAttempts = 0;
-                    ShowCaptchaControls(false);
-
-                    MessageBox.Show("Вход выполнен");
-
-                    // Открываем форму по роли
-                    if (role == "Администратор")
+                    // Проверка admin/admin (из задания)
+                    if (txtLogin.Text == "admin" && txtPassword.Text == "admin")
                     {
-                        new MainForm(role).Show(); // Передаем роль в конструктор MainForm
-                    }
-                    else if (role == "Кладовщик")
-                    {
-                        new StorekeeperForm().Show();
-                    }
-                    else if (role == "Менеджер")
-                    {
-                        new ManagerForm().Show();
+                        // Успешный вход для admin
+                        failedAttempts = 0;
+                        ShowCaptchaControls(false);
+
+                        MessageBox.Show("Вход выполнен как администратор");
+
+                        // Открываем форму для админа (например, ImportForm)
+                        // new ImportForm().Show();
+                        // this.Hide();
+                        return;
                     }
 
-                    Hide(); // Скрываем форму входа
+                    // Проверка в БД
+                    var cmd = new MySqlCommand(@"
+                        SELECT r.Name
+                        FROM Employees e
+                        JOIN Roles r ON e.RoleId = r.Id
+                        WHERE e.Login = @l AND e.Password = @p", con);
+
+                    cmd.Parameters.AddWithValue("@l", txtLogin.Text);
+                    cmd.Parameters.AddWithValue("@p", txtPassword.Text);
+
+                    con.Open();
+                    var reader = cmd.ExecuteReader();
+
+                    if (reader.Read())
+                    {
+                        string role = reader.GetString(0);
+
+                        // Успешный вход
+                        failedAttempts = 0;
+                        ShowCaptchaControls(false);
+
+                        MessageBox.Show($"Вход выполнен. Роль: {role}");
+
+                        // Открываем форму по роли
+                        switch (role)
+                        {
+                            case "Администратор":
+                                new MainForm(role).Show();
+                                break;
+                            case "Кладовщик":
+                                new StorekeeperForm().Show();
+                                break;
+                            case "Менеджер":
+                                new ManagerForm().Show();
+                                break;
+                            default:
+                                MessageBox.Show("Неизвестная роль!");
+                                return;
+                        }
+
+                        this.Hide();
+                    }
+                    else
+                    {
+                        // Неудачная попытка
+                        failedAttempts++;
+
+                        MessageBox.Show("Неверный логин или пароль!");
+
+                        if (failedAttempts >= 1)
+                        {
+                            ShowCaptchaControls(true);
+                        }
+                    }
                 }
-                else
-                {
-                    // НЕУДАЧНАЯ ПОПЫТКА - увеличиваем счетчик
-                    failedAttempts++;
-
-                    MessageBox.Show("Ошибка входа");
-
-                    // После первой неудачи показываем капчу
-                    if (failedAttempts >= 1)
-                    {
-                        ShowCaptchaControls(true);
-                    }
-                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка подключения к БД: {ex.Message}");
             }
         }
     }
