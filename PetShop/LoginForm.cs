@@ -216,7 +216,7 @@ namespace PetShop
                     }
                     else
                     {
-                        // Неудачная попытка.
+                        // Неудачная попытка..
                         failedAttempts++;
 
                         MessageBox.Show("Неверный логин или пароль!");
