@@ -19,6 +19,10 @@ namespace PetShop
         {
             InitializeComponent();
             InitializeCaptcha();
+
+            // ===== ПРИВЯЗКА ОБРАБОТЧИКА КНОПКИ ОБНОВЛЕНИЯ =====
+            // Added: эта строка привязывает событие Click к методу btnRefreshCaptcha_Click
+            this.btnRefreshCaptcha.Click += new System.EventHandler(this.btnRefreshCaptcha_Click);
         }
 
         // ===== ИНИЦИАЛИЗАЦИЯ CAPTCHA =====
