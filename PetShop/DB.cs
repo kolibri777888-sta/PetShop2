@@ -20,5 +20,10 @@ namespace PetShop
 
             return new MySqlConnection(cs);
         }
+
+        internal static bool TestConnection()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

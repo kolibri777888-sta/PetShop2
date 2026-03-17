@@ -40,6 +40,10 @@ namespace PetShop
             this.btnLastPage = new System.Windows.Forms.Button();
             this.lblRecordInfo = new System.Windows.Forms.Label();
             this.lblColorHint = new System.Windows.Forms.Label();
+            this.txtSearch = new System.Windows.Forms.TextBox();
+            this.comboCategory = new System.Windows.Forms.ComboBox();
+            this.label1 = new System.Windows.Forms.Label();
+            this.label2 = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.dgv)).BeginInit();
             this.SuspendLayout();
             // 
@@ -102,7 +106,7 @@ namespace PetShop
             // 
             // btnFirstPage
             // 
-            this.btnFirstPage.Location = new System.Drawing.Point(411, 46);
+            this.btnFirstPage.Location = new System.Drawing.Point(310, 29);
             this.btnFirstPage.Name = "btnFirstPage";
             this.btnFirstPage.Size = new System.Drawing.Size(75, 23);
             this.btnFirstPage.TabIndex = 4;
@@ -111,7 +115,7 @@ namespace PetShop
             // 
             // btnPrevPage
             // 
-            this.btnPrevPage.Location = new System.Drawing.Point(410, 103);
+            this.btnPrevPage.Location = new System.Drawing.Point(310, 58);
             this.btnPrevPage.Name = "btnPrevPage";
             this.btnPrevPage.Size = new System.Drawing.Size(75, 23);
             this.btnPrevPage.TabIndex = 5;
@@ -121,16 +125,15 @@ namespace PetShop
             // lblPageInfo
             // 
             this.lblPageInfo.AutoSize = true;
-            this.lblPageInfo.Location = new System.Drawing.Point(311, 22);
+            this.lblPageInfo.Location = new System.Drawing.Point(502, 32);
             this.lblPageInfo.Name = "lblPageInfo";
             this.lblPageInfo.Size = new System.Drawing.Size(94, 13);
             this.lblPageInfo.TabIndex = 6;
             this.lblPageInfo.Text = "Страница 1 из 10";
-            this.lblPageInfo.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
             // btnNextPage
             // 
-            this.btnNextPage.Location = new System.Drawing.Point(577, 49);
+            this.btnNextPage.Location = new System.Drawing.Point(409, 32);
             this.btnNextPage.Name = "btnNextPage";
             this.btnNextPage.Size = new System.Drawing.Size(75, 23);
             this.btnNextPage.TabIndex = 7;
@@ -139,7 +142,7 @@ namespace PetShop
             // 
             // btnLastPage
             // 
-            this.btnLastPage.Location = new System.Drawing.Point(555, 102);
+            this.btnLastPage.Location = new System.Drawing.Point(423, 61);
             this.btnLastPage.Name = "btnLastPage";
             this.btnLastPage.Size = new System.Drawing.Size(75, 23);
             this.btnLastPage.TabIndex = 8;
@@ -149,7 +152,7 @@ namespace PetShop
             // lblRecordInfo
             // 
             this.lblRecordInfo.AutoSize = true;
-            this.lblRecordInfo.Location = new System.Drawing.Point(318, 61);
+            this.lblRecordInfo.Location = new System.Drawing.Point(238, 111);
             this.lblRecordInfo.Name = "lblRecordInfo";
             this.lblRecordInfo.Size = new System.Drawing.Size(64, 13);
             this.lblRecordInfo.TabIndex = 9;
@@ -159,11 +162,44 @@ namespace PetShop
             // 
             this.lblColorHint.AutoSize = true;
             this.lblColorHint.ForeColor = System.Drawing.Color.Red;
-            this.lblColorHint.Location = new System.Drawing.Point(285, 128);
+            this.lblColorHint.Location = new System.Drawing.Point(404, 120);
             this.lblColorHint.Name = "lblColorHint";
             this.lblColorHint.Size = new System.Drawing.Size(87, 13);
             this.lblColorHint.TabIndex = 10;
             this.lblColorHint.Text = "мало на складе";
+            // 
+            // txtSearch
+            // 
+            this.txtSearch.Location = new System.Drawing.Point(44, 139);
+            this.txtSearch.Name = "txtSearch";
+            this.txtSearch.Size = new System.Drawing.Size(100, 20);
+            this.txtSearch.TabIndex = 11;
+            // 
+            // comboCategory
+            // 
+            this.comboCategory.FormattingEnabled = true;
+            this.comboCategory.Location = new System.Drawing.Point(232, 156);
+            this.comboCategory.Name = "comboCategory";
+            this.comboCategory.Size = new System.Drawing.Size(121, 21);
+            this.comboCategory.TabIndex = 12;
+            // 
+            // label1
+            // 
+            this.label1.AutoSize = true;
+            this.label1.Location = new System.Drawing.Point(41, 123);
+            this.label1.Name = "label1";
+            this.label1.Size = new System.Drawing.Size(39, 13);
+            this.label1.TabIndex = 13;
+            this.label1.Text = "Поиск";
+            // 
+            // label2
+            // 
+            this.label2.AutoSize = true;
+            this.label2.Location = new System.Drawing.Point(229, 140);
+            this.label2.Name = "label2";
+            this.label2.Size = new System.Drawing.Size(60, 13);
+            this.label2.TabIndex = 14;
+            this.label2.Text = "Категория";
             // 
             // ProductsForm
             // 
@@ -171,6 +207,10 @@ namespace PetShop
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.Gold;
             this.ClientSize = new System.Drawing.Size(722, 463);
+            this.Controls.Add(this.label2);
+            this.Controls.Add(this.label1);
+            this.Controls.Add(this.comboCategory);
+            this.Controls.Add(this.txtSearch);
             this.Controls.Add(this.lblColorHint);
             this.Controls.Add(this.lblRecordInfo);
             this.Controls.Add(this.btnLastPage);
@@ -208,5 +248,9 @@ namespace PetShop
         private System.Windows.Forms.Button btnLastPage;
         private System.Windows.Forms.Label lblRecordInfo;
         private System.Windows.Forms.Label lblColorHint;
+        private System.Windows.Forms.TextBox txtSearch;
+        private System.Windows.Forms.ComboBox comboCategory;
+        private System.Windows.Forms.Label label1;
+        private System.Windows.Forms.Label label2;
     }
 }

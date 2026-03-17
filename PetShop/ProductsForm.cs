@@ -13,35 +13,77 @@ namespace PetShop
         private int totalPages = 1;
         private int totalRecords = 0;
         private int pageSize = 20;
-        private DataTable fullDataTable; // для хранения всех данных при фильтрации
-        private DataTable productsTable; // добавлено для хранения текущей таблицы
-
-        // Строка подключения - замените на вашу!
-        private string connStr = "Server=localhost;Database=PetShop;Uid=root;Pwd=;";
+        private DataTable fullDataTable;
 
         public ProductsForm()
         {
             InitializeComponent();
 
-            // Загружаем данные после полной загрузки формы
+            // Проверяем подключение при загрузке формы
+            this.Load += ProductsForm_Load;
             this.Shown += ProductsForm_Shown;
+        }
+
+        private void ProductsForm_Load(object sender, EventArgs e)
+        {
+            // Проверяем подключение к БД
+            if (!DB.TestConnection())
+            {
+                MessageBox.Show("Не удалось подключиться к базе данных. Проверьте настройки подключения.",
+                    "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void ProductsForm_Shown(object sender, EventArgs e)
         {
             LoadProducts();
+            LoadCategories(); // Загружаем категории для фильтрации
         }
 
-        // ===== НОВЫЙ МЕТОД: Подсчет общего количества записей =====
+        // ===============================
+        // Загрузка категорий для фильтрации
+        // ===============================
+        private void LoadCategories()
+        {
+            try
+            {
+                using (var con = DB.Get())
+                {
+                    string sql = "SELECT Name FROM Categories ORDER BY Name";
+                    using (var da = new MySqlDataAdapter(sql, con))
+                    {
+                        DataTable dt = new DataTable();
+                        da.Fill(dt);
+
+                        // Добавляем пустой элемент для сброса фильтра
+                        DataRow emptyRow = dt.NewRow();
+                        emptyRow["Name"] = "Все категории";
+                        dt.Rows.InsertAt(emptyRow, 0);
+
+                        comboCategory.DisplayMember = "Name";
+                        comboCategory.ValueMember = "Name";
+                        comboCategory.DataSource = dt;
+                        comboCategory.SelectedIndex = 0; // Выбираем "Все категории"
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка загрузки категорий: " + ex.Message);
+            }
+        }
+
+        // ===============================
+        // Подсчет общего количества записей
+        // ===============================
         private int GetTotalRecords()
         {
             try
             {
-                using (MySqlConnection conn = new MySqlConnection(connStr))
+                using (var con = DB.Get())
                 {
-                    conn.Open();
-                    string sql = "SELECT COUNT(*) FROM product"; // Исправлено на product (в соответствии с первой версией)
-                    using (MySqlCommand cmd = new MySqlCommand(sql, conn))
+                    string sql = "SELECT COUNT(*) FROM Products";
+                    using (var cmd = new MySqlCommand(sql, con))
                     {
                         return Convert.ToInt32(cmd.ExecuteScalar());
                     }
@@ -61,117 +103,280 @@ namespace PetShop
         {
             try
             {
-                // Получаем общее количество записей
                 totalRecords = GetTotalRecords();
                 totalPages = (int)Math.Ceiling((double)totalRecords / pageSize);
 
-                // Корректируем текущую страницу
+                if (totalPages == 0) totalPages = 1;
                 if (currentPage < 1) currentPage = 1;
                 if (currentPage > totalPages) currentPage = totalPages;
 
                 int offset = (currentPage - 1) * pageSize;
 
-                using (MySqlConnection conn = new MySqlConnection(connStr))
+                using (var con = DB.Get())
                 {
-                    conn.Open();
-                    string sql = @"SELECT
-                            p.product_id AS ID,
-                            p.title AS Название,
-                            p.author AS Автор,
-                            p.price AS Цена,
-                            c.name AS Категория,
-                            p.stock_quantity AS Остаток,
-                            p.image_path
-                          FROM product p
-                          JOIN category c ON p.category_id = c.category_id
-                          ORDER BY p.title
-                          LIMIT @pageSize OFFSET @offset";
+                    string sql = @"
+                        SELECT
+                            p.Id,
+                            p.Article,
+                            p.Name,
+                            p.Price,
+                            IFNULL(w.Quantity, 0) AS Quantity,
+                            p.Discount,
+                            c.Name AS Category,
+                            p.ImagePath
+                        FROM Products p
+                        JOIN Categories c ON p.CategoryId = c.Id
+                        LEFT JOIN Warehouse w ON p.Id = w.ProductId
+                        ORDER BY p.Name
+                        LIMIT @pageSize OFFSET @offset";
 
-                    MySqlDataAdapter da = new MySqlDataAdapter(sql, conn);
-                    da.SelectCommand.Parameters.AddWithValue("@pageSize", pageSize);
-                    da.SelectCommand.Parameters.AddWithValue("@offset", offset);
-
-                    DataTable dt = new DataTable();
-                    da.Fill(dt);
-
-                    // СОЗДАЁМ КОЛОНКУ ДЛЯ КАРТИНОК
-                    DataColumn imageColumn = new DataColumn("Обложка", typeof(Image));
-                    dt.Columns.Add(imageColumn);
-                    imageColumn.SetOrdinal(0);
-
-                    // ЗАГРУЖАЕМ КАРТИНКИ
-                    DatabaseHelper db = new DatabaseHelper();
-                    foreach (DataRow row in dt.Rows)
+                    using (var cmd = new MySqlCommand(sql, con))
                     {
-                        string imagePath = row["image_path"]?.ToString();
-                        row["Обложка"] = db.GetProductImage(imagePath);
+                        cmd.Parameters.AddWithValue("@pageSize", pageSize);
+                        cmd.Parameters.AddWithValue("@offset", offset);
+
+                        using (var da = new MySqlDataAdapter(cmd))
+                        {
+                            DataTable dt = new DataTable();
+                            da.Fill(dt);
+
+                            dgv.DataSource = dt;
+                            fullDataTable = dt;
+                        }
                     }
 
-                    // СКРЫВАЕМ СЛУЖЕБНЫЕ ПОЛЯ
-                    dt.Columns["ID"].ColumnMapping = MappingType.Hidden;
-                    dt.Columns["image_path"].ColumnMapping = MappingType.Hidden;
-
-                    // ПРИВЯЗЫВАЕМ ДАННЫЕ
-                    dgv.DataSource = dt;
-                    productsTable = dt;
-
-                    // Обновляем информацию о страницах
+                    ConfigureDataGridView();
+                    LoadImages();
                     UpdatePageInfo();
+                    HighlightRows();
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Ошибка при загрузке товаров: " + ex.Message);
+                MessageBox.Show("Ошибка загрузки товаров: " + ex.Message);
             }
         }
 
-        // ===== НОВЫЙ МЕТОД: Обновление информации о пагинации =====
+        // ===============================
+        // Настройка DataGridView
+        // ===============================
+        private void ConfigureDataGridView()
+        {
+            // Скрываем системные колонки
+            if (dgv.Columns["Id"] != null)
+                dgv.Columns["Id"].Visible = false;
+
+            if (dgv.Columns["ImagePath"] != null)
+                dgv.Columns["ImagePath"].Visible = false;
+
+            // Названия колонок
+            if (dgv.Columns["Article"] != null)
+                dgv.Columns["Article"].HeaderText = "Артикул";
+
+            if (dgv.Columns["Name"] != null)
+                dgv.Columns["Name"].HeaderText = "Название";
+
+            if (dgv.Columns["Price"] != null)
+            {
+                dgv.Columns["Price"].HeaderText = "Цена";
+                dgv.Columns["Price"].DefaultCellStyle.Format = "C2";
+            }
+
+            if (dgv.Columns["Quantity"] != null)
+                dgv.Columns["Quantity"].HeaderText = "Количество";
+
+            if (dgv.Columns["Discount"] != null)
+            {
+                dgv.Columns["Discount"].HeaderText = "Скидка (%)";
+                dgv.Columns["Discount"].DefaultCellStyle.Format = "0'%'";
+            }
+
+            if (dgv.Columns["Category"] != null)
+                dgv.Columns["Category"].HeaderText = "Категория";
+
+            // Создаем колонку для фото если её нет
+            if (!dgv.Columns.Contains("PhotoColumn"))
+            {
+                DataGridViewImageColumn imgCol = new DataGridViewImageColumn();
+                imgCol.Name = "PhotoColumn";
+                imgCol.HeaderText = "Фото";
+                imgCol.ImageLayout = DataGridViewImageCellLayout.Zoom;
+                imgCol.Width = 80;
+                dgv.Columns.Insert(0, imgCol);
+            }
+
+            dgv.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgv.RowTemplate.Height = 60;
+            dgv.AllowUserToAddRows = false;
+            dgv.ReadOnly = true;
+            dgv.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dgv.MultiSelect = false;
+        }
+
+        // ===============================
+        // Загрузка изображений
+        // ===============================
+        private void LoadImages()
+        {
+            foreach (DataGridViewRow row in dgv.Rows)
+            {
+                if (row.IsNewRow) continue;
+
+                string path = row.Cells["ImagePath"].Value?.ToString();
+
+                if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                {
+                    try
+                    {
+                        using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read))
+                        {
+                            row.Cells["PhotoColumn"].Value = Image.FromStream(fs);
+                        }
+                    }
+                    catch
+                    {
+                        // Если не удалось загрузить изображение, ставим заглушку
+                        row.Cells["PhotoColumn"].Value = null;
+                    }
+                }
+                else
+                {
+                    // Если нет изображения, ставим null
+                    row.Cells["PhotoColumn"].Value = null;
+                }
+            }
+        }
+
+        // ===============================
+        // Подсветка строк
+        // ===============================
+        private void HighlightRows()
+        {
+            foreach (DataGridViewRow row in dgv.Rows)
+            {
+                if (row.IsNewRow) continue;
+
+                if (row.Cells["Quantity"].Value != null)
+                {
+                    int qty = Convert.ToInt32(row.Cells["Quantity"].Value);
+
+                    if (qty == 0)
+                    {
+                        row.DefaultCellStyle.BackColor = Color.MistyRose;
+                        row.DefaultCellStyle.ForeColor = Color.DarkRed;
+                    }
+                    else if (qty < 5)
+                    {
+                        row.DefaultCellStyle.BackColor = Color.LightCoral;
+                        row.DefaultCellStyle.ForeColor = Color.Black;
+                    }
+                    else
+                    {
+                        row.DefaultCellStyle.BackColor = Color.White;
+                        row.DefaultCellStyle.ForeColor = Color.Black;
+                    }
+                }
+            }
+        }
+
+        // ===============================
+        // Обновление информации о страницах
+        // ===============================
         private void UpdatePageInfo()
         {
-            // Предполагается, что у вас есть Label для отображения информации
-            // Если нет - создайте через дизайнер или раскомментируйте создание
+            if (lblPageInfo != null)
+                lblPageInfo.Text = $"Страница {currentPage} из {totalPages}";
 
-            // Ищем Label на форме
-            Label lblPageInfo = this.Controls["lblPageInfo"] as Label;
-            if (lblPageInfo == null)
+            if (lblRecordInfo != null && totalRecords > 0)
             {
-                // Если нет - создаем программно
-                lblPageInfo = new Label();
-                lblPageInfo.Name = "lblPageInfo";
-                lblPageInfo.Location = new Point(10, 400); // Настройте позицию
-                lblPageInfo.Size = new Size(200, 20);
-                this.Controls.Add(lblPageInfo);
+                int startRecord = (currentPage - 1) * pageSize + 1;
+                int endRecord = Math.Min(currentPage * pageSize, totalRecords);
+                lblRecordInfo.Text = $"{startRecord}-{endRecord} из {totalRecords}";
+            }
+            else if (lblRecordInfo != null)
+            {
+                lblRecordInfo.Text = "Нет записей";
             }
 
-            int startRecord = (currentPage - 1) * pageSize + 1;
-            int endRecord = Math.Min(currentPage * pageSize, totalRecords);
-
-            lblPageInfo.Text = $"Записи {startRecord}-{endRecord} из {totalRecords} | Страница {currentPage} из {totalPages}";
-
-            // Обновляем состояние кнопок навигации
-            Button btnPrev = this.Controls["btnPrev"] as Button;
-            Button btnNext = this.Controls["btnNext"] as Button;
-            Button btnFirst = this.Controls["btnFirst"] as Button;
-            Button btnLast = this.Controls["btnLast"] as Button;
-
-            if (btnPrev != null)
-                btnPrev.Enabled = (currentPage > 1);
-            if (btnNext != null)
-                btnNext.Enabled = (currentPage < totalPages);
-            if (btnFirst != null)
-                btnFirst.Enabled = (currentPage > 1);
-            if (btnLast != null)
-                btnLast.Enabled = (currentPage < totalPages);
+            // Включаем/выключаем кнопки
+            if (btnFirstPage != null)
+            {
+                btnFirstPage.Enabled = currentPage > 1 && totalPages > 0;
+                btnPrevPage.Enabled = currentPage > 1 && totalPages > 0;
+                btnNextPage.Enabled = currentPage < totalPages && totalPages > 0;
+                btnLastPage.Enabled = currentPage < totalPages && totalPages > 0;
+            }
         }
 
-        // ===== НОВЫЕ МЕТОДЫ: Навигация по страницам =====
-        private void btnFirst_Click(object sender, EventArgs e)
+        // ===============================
+        // Применение фильтров
+        // ===============================
+        private void ApplyFilters()
+        {
+            if (fullDataTable == null) return;
+
+            string filter = "";
+
+            // Фильтр по поиску
+            if (!string.IsNullOrWhiteSpace(txtSearch.Text))
+            {
+                filter += $"Name LIKE '%{txtSearch.Text}%'";
+            }
+
+            // Фильтр по категории
+            if (comboCategory.SelectedIndex > 0) // Не "Все категории"
+            {
+                if (!string.IsNullOrWhiteSpace(filter))
+                    filter += " AND ";
+                filter += $"Category = '{comboCategory.Text}'";
+            }
+
+            DataTable dt = (DataTable)dgv.DataSource;
+            dt.DefaultView.RowFilter = filter;
+
+            // Пересчитываем количество страниц для отфильтрованных данных
+            int filteredCount = dt.DefaultView.Count;
+            totalPages = (int)Math.Ceiling((double)filteredCount / pageSize);
+            if (totalPages == 0) totalPages = 1;
+            currentPage = 1;
+
+            UpdatePageInfo();
+            HighlightRows();
+        }
+
+        // ===============================
+        // Обработчики фильтрации
+        // ===============================
+        private void txtSearch_TextChanged(object sender, EventArgs e)
+        {
+            ApplyFilters();
+        }
+
+        private void comboCategory_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            ApplyFilters();
+        }
+
+        // ===============================
+        // Сброс фильтров
+        // ===============================
+        private void btnClearFilter_Click(object sender, EventArgs e)
+        {
+            txtSearch.Text = "";
+            comboCategory.SelectedIndex = 0;
+            LoadProducts();
+        }
+
+        // ===============================
+        // Навигация по страницам
+        // ===============================
+        private void btnFirstPage_Click(object sender, EventArgs e)
         {
             currentPage = 1;
             LoadProducts();
         }
 
-        private void btnPrev_Click(object sender, EventArgs e)
+        private void btnPrevPage_Click(object sender, EventArgs e)
         {
             if (currentPage > 1)
             {
@@ -180,7 +385,7 @@ namespace PetShop
             }
         }
 
-        private void btnNext_Click(object sender, EventArgs e)
+        private void btnNextPage_Click(object sender, EventArgs e)
         {
             if (currentPage < totalPages)
             {
@@ -189,91 +394,122 @@ namespace PetShop
             }
         }
 
-        private void btnLast_Click(object sender, EventArgs e)
+        private void btnLastPage_Click(object sender, EventArgs e)
         {
             currentPage = totalPages;
             LoadProducts();
         }
 
-        // ===== НОВЫЙ МЕТОД: Переход на конкретную страницу =====
-        private void btnGoToPage_Click(object sender, EventArgs e)
-        {
-            TextBox txtPage = this.Controls["txtPage"] as TextBox;
-            if (txtPage != null && int.TryParse(txtPage.Text, out int page))
-            {
-                if (page >= 1 && page <= totalPages)
-                {
-                    currentPage = page;
-                    LoadProducts();
-                }
-                else
-                {
-                    MessageBox.Show($"Введите страницу от 1 до {totalPages}");
-                }
-            }
-        }
-
         // ===============================
-        // Добавление товара
+        // CRUD операции
         // ===============================
         private void btnAdd_Click(object sender, EventArgs e)
         {
-            new AddProductForm().ShowDialog();
-            LoadProducts();
+            try
+            {
+                // Открыть форму добавления
+                // AddProductForm addForm = new AddProductForm();
+                // addForm.ShowDialog();
+                MessageBox.Show("Форма добавления товара", "Информация",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                LoadProducts();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка при открытии формы добавления: " + ex.Message);
+            }
         }
 
-        // ===============================
-        // Редактирование товара
-        // ===============================
         private void btnEdit_Click(object sender, EventArgs e)
         {
             if (dgv.SelectedRows.Count == 0)
             {
-                MessageBox.Show("Выберите товар!");
+                MessageBox.Show("Выберите товар для редактирования!",
+                    "Внимание", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            int id = Convert.ToInt32(dgv.SelectedRows[0].Cells["ID"].Value);
-
-            new EditProductForm(id).ShowDialog();
-
-            LoadProducts();
+            try
+            {
+                int id = Convert.ToInt32(dgv.SelectedRows[0].Cells["Id"].Value);
+                // Открыть форму редактирования с id
+                // EditProductForm editForm = new EditProductForm(id);
+                // editForm.ShowDialog();
+                MessageBox.Show($"Редактирование товара с ID: {id}", "Информация",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                LoadProducts();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка при открытии формы редактирования: " + ex.Message);
+            }
         }
 
-        // ===============================
-        // Удаление товара
-        // ===============================
         private void btnDelete_Click(object sender, EventArgs e)
         {
             if (dgv.SelectedRows.Count == 0)
             {
-                MessageBox.Show("Выберите товар!");
+                MessageBox.Show("Выберите товар для удаления!",
+                    "Внимание", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            if (MessageBox.Show("Удалить выбранный товар?", "Подтверждение", MessageBoxButtons.YesNo) != DialogResult.Yes)
+            if (MessageBox.Show("Вы действительно хотите удалить выбранный товар?",
+                "Подтверждение удаления", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                 return;
 
-            int id = Convert.ToInt32(dgv.SelectedRows[0].Cells["ID"].Value);
+            int id = Convert.ToInt32(dgv.SelectedRows[0].Cells["Id"].Value);
 
             try
             {
-                using (var con = new MySqlConnection(connStr))
+                using (var con = DB.Get())
                 {
-                    var cmd = new MySqlCommand("DELETE FROM product WHERE product_id=@id", con);
-                    cmd.Parameters.AddWithValue("@id", id);
+                    string sql = "DELETE FROM Products WHERE Id = @id";
+                    using (var cmd = new MySqlCommand(sql, con))
+                    {
+                        cmd.Parameters.AddWithValue("@id", id);
+                        int rowsAffected = cmd.ExecuteNonQuery();
 
-                    con.Open();
-                    cmd.ExecuteNonQuery();
+                        if (rowsAffected > 0)
+                        {
+                            MessageBox.Show("Товар успешно удалён!", "Успех",
+                                MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            LoadProducts();
+                        }
+                        else
+                        {
+                            MessageBox.Show("Товар не найден!", "Ошибка",
+                                MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                    }
                 }
-
-                MessageBox.Show("Товар удалён!");
-                LoadProducts();
             }
-            catch
+            catch (MySqlException ex)
             {
-                MessageBox.Show("Нельзя удалить: есть связанные данные!");
+                if (ex.Number == 1451) // Foreign key constraint
+                {
+                    MessageBox.Show("Невозможно удалить товар, так как он используется в заказах!",
+                        "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                else
+                {
+                    MessageBox.Show("Ошибка MySQL: " + ex.Message, "Ошибка",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка при удалении: " + ex.Message, "Ошибка",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // ===============================
+        // Обновление данных
+        // ===============================
+        private void btnRefresh_Click(object sender, EventArgs e)
+        {
+            LoadProducts();
         }
     }
 }
