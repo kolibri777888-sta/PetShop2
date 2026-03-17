@@ -18,26 +18,13 @@ namespace PetShop
         public ProductsForm()
         {
             InitializeComponent();
-
-            // Проверяем подключение при загрузке формы
-            this.Load += ProductsForm_Load;
             this.Shown += ProductsForm_Shown;
-        }
-
-        private void ProductsForm_Load(object sender, EventArgs e)
-        {
-            // Проверяем подключение к БД
-            if (!DB.TestConnection())
-            {
-                MessageBox.Show("Не удалось подключиться к базе данных. Проверьте настройки подключения.",
-                    "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
         }
 
         private void ProductsForm_Shown(object sender, EventArgs e)
         {
             LoadProducts();
-            LoadCategories(); // Загружаем категории для фильтрации
+            LoadCategories();
         }
 
         // ===============================
@@ -55,7 +42,6 @@ namespace PetShop
                         DataTable dt = new DataTable();
                         da.Fill(dt);
 
-                        // Добавляем пустой элемент для сброса фильтра
                         DataRow emptyRow = dt.NewRow();
                         emptyRow["Name"] = "Все категории";
                         dt.Rows.InsertAt(emptyRow, 0);
@@ -63,7 +49,7 @@ namespace PetShop
                         comboCategory.DisplayMember = "Name";
                         comboCategory.ValueMember = "Name";
                         comboCategory.DataSource = dt;
-                        comboCategory.SelectedIndex = 0; // Выбираем "Все категории"
+                        comboCategory.SelectedIndex = 0;
                     }
                 }
             }
@@ -162,14 +148,12 @@ namespace PetShop
         // ===============================
         private void ConfigureDataGridView()
         {
-            // Скрываем системные колонки
             if (dgv.Columns["Id"] != null)
                 dgv.Columns["Id"].Visible = false;
 
             if (dgv.Columns["ImagePath"] != null)
                 dgv.Columns["ImagePath"].Visible = false;
 
-            // Названия колонок
             if (dgv.Columns["Article"] != null)
                 dgv.Columns["Article"].HeaderText = "Артикул";
 
@@ -194,7 +178,6 @@ namespace PetShop
             if (dgv.Columns["Category"] != null)
                 dgv.Columns["Category"].HeaderText = "Категория";
 
-            // Создаем колонку для фото если её нет
             if (!dgv.Columns.Contains("PhotoColumn"))
             {
                 DataGridViewImageColumn imgCol = new DataGridViewImageColumn();
@@ -235,13 +218,11 @@ namespace PetShop
                     }
                     catch
                     {
-                        // Если не удалось загрузить изображение, ставим заглушку
                         row.Cells["PhotoColumn"].Value = null;
                     }
                 }
                 else
                 {
-                    // Если нет изображения, ставим null
                     row.Cells["PhotoColumn"].Value = null;
                 }
             }
@@ -298,7 +279,6 @@ namespace PetShop
                 lblRecordInfo.Text = "Нет записей";
             }
 
-            // Включаем/выключаем кнопки
             if (btnFirstPage != null)
             {
                 btnFirstPage.Enabled = currentPage > 1 && totalPages > 0;
@@ -317,14 +297,12 @@ namespace PetShop
 
             string filter = "";
 
-            // Фильтр по поиску
             if (!string.IsNullOrWhiteSpace(txtSearch.Text))
             {
                 filter += $"Name LIKE '%{txtSearch.Text}%'";
             }
 
-            // Фильтр по категории
-            if (comboCategory.SelectedIndex > 0) // Не "Все категории"
+            if (comboCategory.SelectedIndex > 0)
             {
                 if (!string.IsNullOrWhiteSpace(filter))
                     filter += " AND ";
@@ -334,7 +312,6 @@ namespace PetShop
             DataTable dt = (DataTable)dgv.DataSource;
             dt.DefaultView.RowFilter = filter;
 
-            // Пересчитываем количество страниц для отфильтрованных данных
             int filteredCount = dt.DefaultView.Count;
             totalPages = (int)Math.Ceiling((double)filteredCount / pageSize);
             if (totalPages == 0) totalPages = 1;
@@ -407,7 +384,6 @@ namespace PetShop
         {
             try
             {
-                // Открыть форму добавления
                 // AddProductForm addForm = new AddProductForm();
                 // addForm.ShowDialog();
                 MessageBox.Show("Форма добавления товара", "Информация",
@@ -416,7 +392,7 @@ namespace PetShop
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Ошибка при открытии формы добавления: " + ex.Message);
+                MessageBox.Show("Ошибка: " + ex.Message);
             }
         }
 
@@ -432,7 +408,6 @@ namespace PetShop
             try
             {
                 int id = Convert.ToInt32(dgv.SelectedRows[0].Cells["Id"].Value);
-                // Открыть форму редактирования с id
                 // EditProductForm editForm = new EditProductForm(id);
                 // editForm.ShowDialog();
                 MessageBox.Show($"Редактирование товара с ID: {id}", "Информация",
@@ -441,7 +416,7 @@ namespace PetShop
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Ошибка при открытии формы редактирования: " + ex.Message);
+                MessageBox.Show("Ошибка: " + ex.Message);
             }
         }
 
@@ -486,7 +461,7 @@ namespace PetShop
             }
             catch (MySqlException ex)
             {
-                if (ex.Number == 1451) // Foreign key constraint
+                if (ex.Number == 1451)
                 {
                     MessageBox.Show("Невозможно удалить товар, так как он используется в заказах!",
                         "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
