@@ -14,6 +14,10 @@ namespace PetShop
         private int totalRecords = 0;
         private int pageSize = 20;
         private DataTable fullDataTable; // для хранения всех данных при фильтрации
+
+        // Строка подключения - замените на вашу!
+        private string connStr = "Server=localhost;Database=PetShop;Uid=root;Pwd=;";
+
         public ProductsForm()
         {
             InitializeComponent();
@@ -27,15 +31,52 @@ namespace PetShop
             LoadProducts();
         }
 
+        // ===== НОВЫЙ МЕТОД: Подсчет общего количества записей =====
+        private int GetTotalRecords()
+        {
+            try
+            {
+                using (MySqlConnection conn = new MySqlConnection(connStr))
+                {
+                    conn.Open();
+                    string sql = "SELECT COUNT(*) FROM Products"; // Исправлено: Products, а не product
+                    using (MySqlCommand cmd = new MySqlCommand(sql, conn))
+                    {
+                        return Convert.ToInt32(cmd.ExecuteScalar());
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка подсчёта записей: " + ex.Message);
+                return 0;
+            }
+        }
+
         // ===============================
-        // Загрузка товаров
+        // Загрузка товаров с пагинацией
         // ===============================
         void LoadProducts()
         {
             try
             {
+                // Получаем общее количество записей
+                totalRecords = GetTotalRecords();
+
+                // Вычисляем общее количество страниц
+                totalPages = (int)Math.Ceiling((double)totalRecords / pageSize);
+                if (totalPages == 0) totalPages = 1;
+
+                // Проверяем, что текущая страница не выходит за пределы
+                if (currentPage < 1) currentPage = 1;
+                if (currentPage > totalPages) currentPage = totalPages;
+
+                // Вычисляем смещение для SQL запроса
+                int offset = (currentPage - 1) * pageSize;
+
                 using (var con = DB.Get())
                 {
+                    // Измененный запрос с LIMIT и OFFSET для пагинации
                     var da = new MySqlDataAdapter(@"
                         SELECT
                             p.Id,
@@ -50,7 +91,11 @@ namespace PetShop
                         JOIN Categories c ON p.CategoryId = c.Id
                         LEFT JOIN Warehouse w ON p.Id = w.ProductId
                         ORDER BY p.Name
+                        LIMIT @offset, @pageSize
                     ", con);
+
+                    da.SelectCommand.Parameters.AddWithValue("@offset", offset);
+                    da.SelectCommand.Parameters.AddWithValue("@pageSize", pageSize);
 
                     DataTable dt = new DataTable();
                     da.Fill(dt);
@@ -58,16 +103,24 @@ namespace PetShop
                     dgv.DataSource = dt;
 
                     // скрываем системные колонки
-                    dgv.Columns["Id"].Visible = false;
-                    dgv.Columns["ImagePath"].Visible = false;
+                    if (dgv.Columns["Id"] != null)
+                        dgv.Columns["Id"].Visible = false;
+                    if (dgv.Columns["ImagePath"] != null)
+                        dgv.Columns["ImagePath"].Visible = false;
 
                     // названия колонок
-                    dgv.Columns["Article"].HeaderText = "Артикул";
-                    dgv.Columns["Name"].HeaderText = "Название";
-                    dgv.Columns["Price"].HeaderText = "Цена";
-                    dgv.Columns["Quantity"].HeaderText = "Количество";
-                    dgv.Columns["Discount"].HeaderText = "Скидка (%)";
-                    dgv.Columns["Category"].HeaderText = "Категория";
+                    if (dgv.Columns["Article"] != null)
+                        dgv.Columns["Article"].HeaderText = "Артикул";
+                    if (dgv.Columns["Name"] != null)
+                        dgv.Columns["Name"].HeaderText = "Название";
+                    if (dgv.Columns["Price"] != null)
+                        dgv.Columns["Price"].HeaderText = "Цена";
+                    if (dgv.Columns["Quantity"] != null)
+                        dgv.Columns["Quantity"].HeaderText = "Количество";
+                    if (dgv.Columns["Discount"] != null)
+                        dgv.Columns["Discount"].HeaderText = "Скидка (%)";
+                    if (dgv.Columns["Category"] != null)
+                        dgv.Columns["Category"].HeaderText = "Категория";
 
                     dgv.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
                     dgv.RowTemplate.Height = 60;
@@ -115,11 +168,102 @@ namespace PetShop
                             row.DefaultCellStyle.ForeColor = Color.DarkRed;
                         }
                     }
+
+                    // Обновляем информацию о страницах
+                    UpdatePaginationInfo();
                 }
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Ошибка загрузки: " + ex.Message);
+            }
+        }
+
+        // ===== НОВЫЙ МЕТОД: Обновление информации о пагинации =====
+        private void UpdatePaginationInfo()
+        {
+            // Предполагается, что у вас есть Label для отображения информации
+            // Если нет - создайте через дизайнер или раскомментируйте создание
+
+            // Ищем Label на форме
+            Label lblPageInfo = this.Controls["lblPageInfo"] as Label;
+            if (lblPageInfo == null)
+            {
+                // Если нет - создаем программно
+                lblPageInfo = new Label();
+                lblPageInfo.Name = "lblPageInfo";
+                lblPageInfo.Location = new Point(10, 400); // Настройте позицию
+                lblPageInfo.Size = new Size(200, 20);
+                this.Controls.Add(lblPageInfo);
+            }
+
+            int startRecord = (currentPage - 1) * pageSize + 1;
+            int endRecord = Math.Min(currentPage * pageSize, totalRecords);
+
+            lblPageInfo.Text = $"Записи {startRecord}-{endRecord} из {totalRecords} | Страница {currentPage} из {totalPages}";
+
+            // Обновляем состояние кнопок навигации
+            Button btnPrev = this.Controls["btnPrev"] as Button;
+            Button btnNext = this.Controls["btnNext"] as Button;
+            Button btnFirst = this.Controls["btnFirst"] as Button;
+            Button btnLast = this.Controls["btnLast"] as Button;
+
+            if (btnPrev != null)
+                btnPrev.Enabled = (currentPage > 1);
+            if (btnNext != null)
+                btnNext.Enabled = (currentPage < totalPages);
+            if (btnFirst != null)
+                btnFirst.Enabled = (currentPage > 1);
+            if (btnLast != null)
+                btnLast.Enabled = (currentPage < totalPages);
+        }
+
+        // ===== НОВЫЕ МЕТОДЫ: Навигация по страницам =====
+        private void btnFirst_Click(object sender, EventArgs e)
+        {
+            currentPage = 1;
+            LoadProducts();
+        }
+
+        private void btnPrev_Click(object sender, EventArgs e)
+        {
+            if (currentPage > 1)
+            {
+                currentPage--;
+                LoadProducts();
+            }
+        }
+
+        private void btnNext_Click(object sender, EventArgs e)
+        {
+            if (currentPage < totalPages)
+            {
+                currentPage++;
+                LoadProducts();
+            }
+        }
+
+        private void btnLast_Click(object sender, EventArgs e)
+        {
+            currentPage = totalPages;
+            LoadProducts();
+        }
+
+        // ===== НОВЫЙ МЕТОД: Переход на конкретную страницу =====
+        private void btnGoToPage_Click(object sender, EventArgs e)
+        {
+            TextBox txtPage = this.Controls["txtPage"] as TextBox;
+            if (txtPage != null && int.TryParse(txtPage.Text, out int page))
+            {
+                if (page >= 1 && page <= totalPages)
+                {
+                    currentPage = page;
+                    LoadProducts();
+                }
+                else
+                {
+                    MessageBox.Show($"Введите страницу от 1 до {totalPages}");
+                }
             }
         }
 
