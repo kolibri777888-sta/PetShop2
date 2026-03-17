@@ -9,6 +9,11 @@ namespace PetShop
 {
     public partial class ProductsForm : Form
     {
+        private int currentPage = 1;
+        private int totalPages = 1;
+        private int totalRecords = 0;
+        private int pageSize = 20;
+        private DataTable fullDataTable; // для хранения всех данных при фильтрации
         public ProductsForm()
         {
             InitializeComponent();
