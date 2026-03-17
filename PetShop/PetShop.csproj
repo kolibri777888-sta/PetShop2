@@ -87,6 +87,7 @@
     <Compile Include="CheckForm.Designer.cs">
       <DependentUpon>CheckForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="DatabaseHelper.cs" />
     <Compile Include="DB.cs" />
     <Compile Include="EditCategoryForm.cs">
       <SubType>Form</SubType>

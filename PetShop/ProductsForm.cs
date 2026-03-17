@@ -14,6 +14,7 @@ namespace PetShop
         private int totalRecords = 0;
         private int pageSize = 20;
         private DataTable fullDataTable; // для хранения всех данных при фильтрации
+        private DataTable productsTable; // добавлено для хранения текущей таблицы
 
         // Строка подключения - замените на вашу!
         private string connStr = "Server=localhost;Database=PetShop;Uid=root;Pwd=;";
@@ -39,7 +40,7 @@ namespace PetShop
                 using (MySqlConnection conn = new MySqlConnection(connStr))
                 {
                     conn.Open();
-                    string sql = "SELECT COUNT(*) FROM Products"; // Исправлено: Products, а не product
+                    string sql = "SELECT COUNT(*) FROM product"; // Исправлено на product (в соответствии с первой версией)
                     using (MySqlCommand cmd = new MySqlCommand(sql, conn))
                     {
                         return Convert.ToInt32(cmd.ExecuteScalar());
@@ -56,131 +57,76 @@ namespace PetShop
         // ===============================
         // Загрузка товаров с пагинацией
         // ===============================
-        void LoadProducts()
+        private void LoadProducts()
         {
             try
             {
                 // Получаем общее количество записей
                 totalRecords = GetTotalRecords();
-
-                // Вычисляем общее количество страниц
                 totalPages = (int)Math.Ceiling((double)totalRecords / pageSize);
-                if (totalPages == 0) totalPages = 1;
 
-                // Проверяем, что текущая страница не выходит за пределы
+                // Корректируем текущую страницу
                 if (currentPage < 1) currentPage = 1;
                 if (currentPage > totalPages) currentPage = totalPages;
 
-                // Вычисляем смещение для SQL запроса
                 int offset = (currentPage - 1) * pageSize;
 
-                using (var con = DB.Get())
+                using (MySqlConnection conn = new MySqlConnection(connStr))
                 {
-                    // Измененный запрос с LIMIT и OFFSET для пагинации
-                    var da = new MySqlDataAdapter(@"
-                        SELECT
-                            p.Id,
-                            p.Article,
-                            p.Name,
-                            p.Price,
-                            IFNULL(w.Quantity,0) AS Quantity,
-                            p.Discount,
-                            c.Name AS Category,
-                            p.ImagePath
-                        FROM Products p
-                        JOIN Categories c ON p.CategoryId = c.Id
-                        LEFT JOIN Warehouse w ON p.Id = w.ProductId
-                        ORDER BY p.Name
-                        LIMIT @offset, @pageSize
-                    ", con);
+                    conn.Open();
+                    string sql = @"SELECT
+                            p.product_id AS ID,
+                            p.title AS Название,
+                            p.author AS Автор,
+                            p.price AS Цена,
+                            c.name AS Категория,
+                            p.stock_quantity AS Остаток,
+                            p.image_path
+                          FROM product p
+                          JOIN category c ON p.category_id = c.category_id
+                          ORDER BY p.title
+                          LIMIT @pageSize OFFSET @offset";
 
-                    da.SelectCommand.Parameters.AddWithValue("@offset", offset);
+                    MySqlDataAdapter da = new MySqlDataAdapter(sql, conn);
                     da.SelectCommand.Parameters.AddWithValue("@pageSize", pageSize);
+                    da.SelectCommand.Parameters.AddWithValue("@offset", offset);
 
                     DataTable dt = new DataTable();
                     da.Fill(dt);
 
+                    // СОЗДАЁМ КОЛОНКУ ДЛЯ КАРТИНОК
+                    DataColumn imageColumn = new DataColumn("Обложка", typeof(Image));
+                    dt.Columns.Add(imageColumn);
+                    imageColumn.SetOrdinal(0);
+
+                    // ЗАГРУЖАЕМ КАРТИНКИ
+                    DatabaseHelper db = new DatabaseHelper();
+                    foreach (DataRow row in dt.Rows)
+                    {
+                        string imagePath = row["image_path"]?.ToString();
+                        row["Обложка"] = db.GetProductImage(imagePath);
+                    }
+
+                    // СКРЫВАЕМ СЛУЖЕБНЫЕ ПОЛЯ
+                    dt.Columns["ID"].ColumnMapping = MappingType.Hidden;
+                    dt.Columns["image_path"].ColumnMapping = MappingType.Hidden;
+
+                    // ПРИВЯЗЫВАЕМ ДАННЫЕ
                     dgv.DataSource = dt;
-
-                    // скрываем системные колонки
-                    if (dgv.Columns["Id"] != null)
-                        dgv.Columns["Id"].Visible = false;
-                    if (dgv.Columns["ImagePath"] != null)
-                        dgv.Columns["ImagePath"].Visible = false;
-
-                    // названия колонок
-                    if (dgv.Columns["Article"] != null)
-                        dgv.Columns["Article"].HeaderText = "Артикул";
-                    if (dgv.Columns["Name"] != null)
-                        dgv.Columns["Name"].HeaderText = "Название";
-                    if (dgv.Columns["Price"] != null)
-                        dgv.Columns["Price"].HeaderText = "Цена";
-                    if (dgv.Columns["Quantity"] != null)
-                        dgv.Columns["Quantity"].HeaderText = "Количество";
-                    if (dgv.Columns["Discount"] != null)
-                        dgv.Columns["Discount"].HeaderText = "Скидка (%)";
-                    if (dgv.Columns["Category"] != null)
-                        dgv.Columns["Category"].HeaderText = "Категория";
-
-                    dgv.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-                    dgv.RowTemplate.Height = 60;
-
-                    // создаём колонку фото если нет
-                    if (!dgv.Columns.Contains("PhotoColumn"))
-                    {
-                        DataGridViewImageColumn imgCol = new DataGridViewImageColumn();
-                        imgCol.Name = "PhotoColumn";
-                        imgCol.HeaderText = "Фото";
-                        imgCol.ImageLayout = DataGridViewImageCellLayout.Zoom;
-
-                        dgv.Columns.Insert(0, imgCol);
-                    }
-
-                    // загружаем изображения
-                    foreach (DataGridViewRow row in dgv.Rows)
-                    {
-                        if (row.IsNewRow) continue;
-
-                        string path = row.Cells["ImagePath"].Value?.ToString();
-
-                        if (!string.IsNullOrEmpty(path) && File.Exists(path))
-                        {
-                            try
-                            {
-                                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read))
-                                {
-                                    row.Cells["PhotoColumn"].Value = Image.FromStream(fs);
-                                }
-                            }
-                            catch
-                            {
-                                row.Cells["PhotoColumn"].Value = null;
-                            }
-                        }
-
-                        // подсветка если товара нет
-                        int qty = 0;
-                        int.TryParse(row.Cells["Quantity"].Value?.ToString(), out qty);
-
-                        if (qty == 0)
-                        {
-                            row.DefaultCellStyle.BackColor = Color.MistyRose;
-                            row.DefaultCellStyle.ForeColor = Color.DarkRed;
-                        }
-                    }
+                    productsTable = dt;
 
                     // Обновляем информацию о страницах
-                    UpdatePaginationInfo();
+                    UpdatePageInfo();
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Ошибка загрузки: " + ex.Message);
+                MessageBox.Show("Ошибка при загрузке товаров: " + ex.Message);
             }
         }
 
         // ===== НОВЫЙ МЕТОД: Обновление информации о пагинации =====
-        private void UpdatePaginationInfo()
+        private void UpdatePageInfo()
         {
             // Предполагается, что у вас есть Label для отображения информации
             // Если нет - создайте через дизайнер или раскомментируйте создание
@@ -287,7 +233,7 @@ namespace PetShop
                 return;
             }
 
-            int id = Convert.ToInt32(dgv.SelectedRows[0].Cells["Id"].Value);
+            int id = Convert.ToInt32(dgv.SelectedRows[0].Cells["ID"].Value);
 
             new EditProductForm(id).ShowDialog();
 
@@ -308,13 +254,13 @@ namespace PetShop
             if (MessageBox.Show("Удалить выбранный товар?", "Подтверждение", MessageBoxButtons.YesNo) != DialogResult.Yes)
                 return;
 
-            int id = Convert.ToInt32(dgv.SelectedRows[0].Cells["Id"].Value);
+            int id = Convert.ToInt32(dgv.SelectedRows[0].Cells["ID"].Value);
 
             try
             {
-                using (var con = DB.Get())
+                using (var con = new MySqlConnection(connStr))
                 {
-                    var cmd = new MySqlCommand("DELETE FROM Products WHERE Id=@id", con);
+                    var cmd = new MySqlCommand("DELETE FROM product WHERE product_id=@id", con);
                     cmd.Parameters.AddWithValue("@id", id);
 
                     con.Open();
